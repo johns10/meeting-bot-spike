@@ -1,0 +1,55 @@
+<div class="header">
+  <h2><%= gettext "Transcribe Meeting" %></h2>
+  <form phx-change="select_input">
+    <div phx-feedback-for="input-select">
+      <label for="input-select" class="label">Input Device</label>
+      <select id="input-select" name="input" class="select select-bordered w-full">
+        <%= Phoenix.HTML.Form.options_for_select(@input_options, @selected_input) %>
+      </select>
+    </div>
+  </form>
+    <form phx-change="select_output">
+    <div phx-feedback-for="output-select">
+      <label for="output-select" class="label">Output Device</label>
+      <select id="output-select" name="output" class="select select-bordered w-full">
+        <option 
+          :for={{name, value} <- @output_options} 
+          value={value} 
+          selected={value == @selected_output}>
+            <%= name %>
+        </option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="record-buttons">
+  <button 
+    phx-click={JS.push("record", value: %{input: @selected_input, output: @selected_output})}
+    disabled={@selected_input == nil || @selected_output == nil}
+  >
+    Record
+  </button>
+
+  <button 
+    phx-click={JS.push("stop")}
+    disabled={@pipeline_pid == nil}
+  >
+    Stop <%= inspect(@pipeline_pid) %>
+  </button>
+</div>
+
+<h2><%= gettext "Recordings" %></h2>
+
+<div>
+  <div class="transcribe-row" :for={recording <- @recordings}>
+    <div class="label">
+      <%= recording %>
+    </div>
+    <button
+      phx-click={JS.push("transcribe", value: %{recording: recording})}
+    >
+      Transcribe
+    </button>
+  </div>
+</div>
