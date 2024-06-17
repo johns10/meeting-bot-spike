@@ -20,7 +20,7 @@ defmodule TodoApp.Transcription.Server do
   def init(state) do
     path = [:code.priv_dir(:todo_app), "python"] |> Path.join()
     {:ok, pid} = :python.start([{:python_path, to_charlist(path)}, {:python, ~c"python3"}])
-    :python.call(pid, :transcribe, :register_handler, [self()])
+    :python.call(pid, :elixir_api, :register_handler, [self()])
     {:ok, Map.put(state, :python_pid, pid)}
   end
 
