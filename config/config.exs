@@ -22,7 +22,6 @@ config :logger,
 
 config :logger, :console,
   level: :notice,
-  format: "$time $metadata[$level] $levelpad$message\n",
   metadata: [:request_id]
 
 # Configures the endpoint

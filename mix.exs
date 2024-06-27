@@ -1,4 +1,4 @@
-defmodule Todo.MixProject do
+defmodule TodoApp.MixProject do
   use Mix.Project
 
   @version "1.2.0"
@@ -8,7 +8,7 @@ defmodule Todo.MixProject do
       version: @version,
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: Mix.compilers(),
+      compilers: [:elixir_make] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
@@ -103,14 +103,15 @@ defmodule Todo.MixProject do
 
       # Libraries
       {:membrane_core, "~> 1.0"},
-      {:membrane_portaudio_plugin, git: "https://github.com/johns10/membrane_portaudio_plugin"},
+      {:membrane_portaudio_plugin, path: "../membrane_portaudio_plugin"},
       {:membrane_audio_mix_plugin, "~> 0.16"},
       {:membrane_raw_audio_format, "~> 0.12.0"},
       {:membrane_raw_audio_parser_plugin, "~> 0.4.0"},
       {:membrane_file_plugin, "~> 0.16.0"},
       {:erlport, "~> 0.11"},
       {:ortex, "~> 0.1.9"},
-      {:nx, "~> 0.7"}
+      {:nx, "~> 0.7"},
+      {:elixir_make, "~> 0.8.4"}
     ]
 
     if Mix.target() in [:android, :ios] do

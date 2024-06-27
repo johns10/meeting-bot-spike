@@ -1,27 +1,33 @@
 defmodule TodoApp.Audio.VADPipelineTest do
   use Membrane.Pipeline
   use ExUnit.Case
-  alias TodoApp.Audio.VADSplitter
+  alias TodoApp.Audio.{VADSplitter, SpeakerDiarizationSplitter, Timestamper, Transcriber}
 
   describe "VAD" do
     test "Base Case" do
-      path = "test/fixtures/vad.raw"
+      path = "test/fixtures/vad-f32.raw"
 
       spec = [
         child(:file_source, %Membrane.File.Source{location: path})
         |> child(:parser, %Membrane.RawAudioParser{
           stream_format: %Membrane.RawAudio{
             channels: 1,
-            sample_format: :s16le,
+            sample_format: :f32le,
             sample_rate: 16_000
           }
         })
-        |> child(:filter, VADSplitter)
-        |> child(:file_sink, %Membrane.File.Sink{location: "test/fixtures/vad_out.raw"})
+        |> child(:timestamper, Timestamper)
+        |> child(:splitter, VADSplitter)
+        |> child(:diarize, SpeakerDiarizationSplitter)
+        |> child(:transcriber, Transcriber)
+        |> child(:pa_sink, %Membrane.File.Sink.Multi{
+          location: "~/Documents/tmp/output",
+          extension: ".bin"
+        })
       ]
 
       Membrane.Testing.Pipeline.start_link_supervised!(module: :default, spec: spec)
-      Process.sleep(1000)
+      Process.sleep(2000)
     end
   end
 end

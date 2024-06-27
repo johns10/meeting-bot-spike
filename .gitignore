@@ -1,4 +1,5 @@
 /priv/*.so*
+/priv/*.o*
 /priv/*.dylib*
 /priv/static/*
 *.log
@@ -36,3 +37,6 @@ npm-debug.log
 # The directory NPM downloads your dependencies sources to.
 /assets/node_modules/
 /tmp
+
+# config dir
+/.config/*
