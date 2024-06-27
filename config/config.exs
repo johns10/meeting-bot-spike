@@ -42,6 +42,11 @@ config :todo_app,
 # We're defining this at runtime
 config :todo_app, TodoApp.Repo, database: ".config/todo/database.sq3"
 
+config :todo_app, Oban,
+  engine: Oban.Engines.Lite,
+  queues: [default: 10],
+  repo: TodoApp.Repo
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -111,7 +111,8 @@ defmodule TodoApp.MixProject do
       {:erlport, "~> 0.11"},
       {:ortex, "~> 0.1.9"},
       {:nx, "~> 0.7"},
-      {:elixir_make, "~> 0.8.4"}
+      {:elixir_make, "~> 0.8.4"},
+      {:oban, "~> 2.17"}
     ]
 
     if Mix.target() in [:android, :ios] do

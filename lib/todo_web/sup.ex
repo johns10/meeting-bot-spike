@@ -13,7 +13,8 @@ defmodule TodoWeb.Sup do
     children = [
       {Phoenix.PubSub, name: TodoApp.PubSub},
       TodoWeb.Endpoint,
-      TodoApp.Transcription.Server
+      TodoApp.Transcription.Server,
+      {Oban, Application.fetch_env!(:todo_app, Oban)}
     ]
 
     :session = :ets.new(:session, [:named_table, :public, read_concurrency: true])
