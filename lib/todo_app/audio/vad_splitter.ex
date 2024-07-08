@@ -54,9 +54,9 @@ defmodule TodoApp.Audio.VADSplitter do
 
           new_actions =
             case {last >= @threshold, prob >= @threshold} do
-              {false, true} -> [:split, chunk]
+              {false, true} -> [chunk]
               {false, false} -> []
-              {true, false} -> [chunk, :split]
+              {true, false} -> [:split]
               {true, true} -> [chunk]
             end
 
@@ -91,9 +91,16 @@ defmodule TodoApp.Audio.VADSplitter do
   defp do_predict(model, h, c, audio) do
     input = Nx.from_binary(audio, :f32) |> Nx.new_axis(0)
     sr = Nx.tensor(@sample_rate)
-    {output, new_h, new_c} = Ortex.run(model, {input, sr, h, c})
-    prob = output |> Nx.squeeze() |> Nx.to_number()
+    {a, b, c} = Ortex.run(model, {input, sr, h, c})
 
+    {output, new_h, new_c} =
+      case [Nx.shape(a), Nx.shape(b), Nx.shape(c)] do
+        [{1, 1}, {2, 1, 64}, {2, 1, 64}] -> {a, b, c}
+        [{2, 1, 64}, {2, 1, 64}, {1, 1}] -> {c, a, b}
+        [{2, 1, 64}, {1, 1}, {2, 1, 64}] -> {b, c, a}
+      end
+
+    prob = output |> Nx.squeeze() |> Nx.to_number()
     {prob, new_h, new_c}
   end
 

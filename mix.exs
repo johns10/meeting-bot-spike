@@ -109,7 +109,7 @@ defmodule TodoApp.MixProject do
       {:membrane_raw_audio_parser_plugin, "~> 0.4.0"},
       {:membrane_file_plugin, "~> 0.16.0"},
       {:erlport, "~> 0.11"},
-      {:ortex, "~> 0.1.9"},
+      {:ortex, git: "https://github.com/elixir-nx/ortex"},
       {:nx, "~> 0.7"},
       {:elixir_make, "~> 0.8.4"},
       {:oban, "~> 2.17"}

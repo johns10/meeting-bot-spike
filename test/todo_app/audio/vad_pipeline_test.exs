@@ -5,7 +5,7 @@ defmodule TodoApp.Audio.VADPipelineTest do
 
   describe "VAD" do
     test "Base Case" do
-      path = "test/fixtures/vad-f32.raw"
+      path = "test/fixtures/diarize.raw"
 
       spec = [
         child(:file_source, %Membrane.File.Source{location: path})
@@ -17,9 +17,7 @@ defmodule TodoApp.Audio.VADPipelineTest do
           }
         })
         |> child(:timestamper, Timestamper)
-        |> child(:splitter, VADSplitter)
         |> child(:diarize, SpeakerDiarizationSplitter)
-        |> child(:transcriber, Transcriber)
         |> child(:pa_sink, %Membrane.File.Sink.Multi{
           location: "~/Documents/tmp/output",
           extension: ".bin"
