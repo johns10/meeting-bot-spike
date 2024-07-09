@@ -4,12 +4,16 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
   alias Membrane.{RawAudio, Buffer}
 
   @sample_rate 16_000
-  @window_duration_milliseconds 10013
+  @window_duration_milliseconds 10030
   @window_duration Membrane.Time.milliseconds(@window_duration_milliseconds)
   @chunk_duration_milliseconds 17
   @chunk_duration Membrane.Time.milliseconds(@chunk_duration_milliseconds)
   @window_samples trunc(@window_duration_milliseconds / @chunk_duration_milliseconds)
-  @frame_samples trunc(@window_samples / 2)
+  @steps_per_frame 2
+  @frame_samples trunc(@window_samples / @steps_per_frame)
+  @batch_axis 0
+  @time_axis 1
+  @speaker_axis 2
 
   def_input_pad(:input,
     accepted_format: %RawAudio{sample_format: :f32le, channels: 1, sample_rate: 16_000}
@@ -29,7 +33,7 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
        model: model,
        buffers: [],
        binaries: [<<>>],
-       speaker_data: [],
+       scores: [],
        byte_index: 0,
        frame_index: 0
      }}
@@ -44,7 +48,7 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
       state
       |> Map.put(:window_size, window_size)
       |> Map.put(:chunk_size, chunk_size)
-      |> Map.put(:frame_size, trunc(window_size / 2))
+      |> Map.put(:frame_size, trunc(window_size / @steps_per_frame))
 
     {[stream_format: {:output, stream_format}], state}
   end
@@ -71,7 +75,7 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
       window_size: window_size,
       buffers: buffers,
       binaries: binaries,
-      speaker_data: speaker_data
+      scores: scores
     } = state
 
     payload_size = byte_size(payload)
@@ -95,55 +99,58 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
         [head <> payload | tail]
       end
 
-    new_speaker_data =
-      if new_frame_index > frame_index && Enum.count(new_binaries) == 3 do
+    new_scores =
+      if new_frame_index > frame_index && Enum.count(new_binaries) == @steps_per_frame + 1 do
         [_current, first, second] = new_binaries
 
         IO.puts(
-          "Generating speaker data for start_index #{(frame_index - 1) * frame_size}, end_index #{new_frame_index * frame_size}. There are #{byte_size(first <> second)} bytes"
+          "Generating scores for start_index #{(frame_index - 1) * frame_size}, end_index #{new_frame_index * frame_size}. There are #{byte_size(first <> second)} bytes"
         )
 
         [
           %{
-            data: get_speaker_data(first <> second, state),
+            data: get_scores(first <> second, state),
             start_index: (frame_index - 1) * frame_size,
             end_index: new_frame_index * frame_size
           }
-          | speaker_data
+          | scores
         ]
       else
-        speaker_data
+        scores
       end
 
     trimmed_binaries =
-      case new_binaries do
-        [_first] = binaries -> binaries
-        [_first, _second] = binaries -> binaries
-        [first, second | _tail] -> [first, second]
+      case Enum.count(new_binaries) > @steps_per_frame do
+        true -> Enum.take(new_binaries, @steps_per_frame)
+        false -> new_binaries
       end
 
-    if new_frame_index > frame_index && Enum.count(new_binaries) == 3 do
+    if new_frame_index > frame_index && new_frame_index > @steps_per_frame - 1 do
       overlap_chunk = Nx.broadcast(0, {1, @frame_samples, 7})
       index_to_run = (new_frame_index - 2) * frame_size
       index_before = (new_frame_index - 3) * frame_size
 
-      first_window =
-        (Enum.find(new_speaker_data, &(&1.start_index == index_before)) || %{data: overlap_chunk})
-        |> Map.get(:data)
+      windows = fetch_windows(new_scores, new_frame_index, frame_size)
 
-      second_window =
-        Enum.find(new_speaker_data, &(&1.start_index == index_to_run))
-        |> Map.get(:data)
+      Enum.count(windows) |> IO.inspect()
 
-      first_window_values =
-        Nx.slice(first_window, [0, 0, 0], [1, @frame_samples, 7])
+      # first_window =
+      #   (Enum.find(new_scores, &(&1.start_index == index_before)) || %{data: overlap_chunk})
+      #   |> Map.get(:data)
 
-      first_window_values =
-        Nx.slice(second_window, [0, 0, 0], [1, @frame_samples, 7])
+      # second_window =
+      #   Enum.find(new_scores, &(&1.start_index == index_to_run))
+      #   |> Map.get(:data)
 
-      IO.puts("On #{new_frame_index * frame_size}. Can run #{index_to_run}")
+      # first_window_values =
+      #   Nx.slice(first_window, [0, 0, 0], [1, @frame_samples, 7])
 
-      aggregate_windows(first_window, second_window)
+      # first_window_values =
+      #   Nx.slice(second_window, [0, 0, 0], [1, @frame_samples, 7])
+
+      # IO.puts("On #{new_frame_index * frame_size}. Can run #{index_to_run}")
+
+      # aggregate_windows(first_window, second_window)
     end
 
     state
@@ -151,13 +158,21 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
     |> Map.put(:frame_index, new_frame_index)
     |> Map.put(:buffers, [buffer | buffers])
     |> Map.put(:binaries, trimmed_binaries)
-    |> Map.put(:speaker_data, new_speaker_data)
+    |> Map.put(:scores, new_scores)
   end
 
-  def increment_sampling_windows([0]), do: [0, 1]
-  def increment_sampling_windows([0, 1]), do: [1, 2]
-  def increment_sampling_windows([1, 2]), do: [2, 0]
-  def increment_sampling_windows([2, 0]), do: [0, 1]
+  def fetch_windows(scores, current_frame_index, frame_size) do
+    indexes =
+      2..(@steps_per_frame + 1)
+      |> Enum.map(&((current_frame_index - &1) * frame_size))
+
+    IO.puts("We will find windows at #{inspect(indexes)} for frame index #{current_frame_index}")
+
+    Enum.map(indexes, fn frame_index ->
+      Enum.find(scores, &(&1.start_index == frame_index))
+    end)
+    |> Enum.reject(&is_nil(&1))
+  end
 
   def aggregate_windows(first_window, second_window, opts \\ []) do
     epsilon = Keyword.get(opts, :epsilon, 1.0e-12)
@@ -173,10 +188,6 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
 
     second_half =
       Nx.slice(first_half, [0, num_frames_per_chunk, 0], [1, num_frames_per_chunk, num_classes])
-
-    combined = Nx.concatenate([first_half, second_half], axis: 1)
-
-    IO.inspect(combined)
 
     # mask = Nx.is_nan(combined)
     # combined = Nx.replace(combined, mask, 0.0)
@@ -218,7 +229,7 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
     0.54 - 0.46 * :math.cos(2 * :math.pi() * n / (m - 1))
   end
 
-  defp get_speaker_data(binary, %{model: model, chunk_size: chunk_size}) do
+  defp get_scores(binary, %{model: model, chunk_size: chunk_size}) do
     tensor = Nx.from_binary(binary, :f32)
     input = Nx.reshape(tensor, {1, 1, div(byte_size(binary), 4)})
     {result} = Ortex.run(model, {input})
