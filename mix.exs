@@ -103,7 +103,7 @@ defmodule TodoApp.MixProject do
 
       # Libraries
       {:membrane_core, "~> 1.0"},
-      {:membrane_portaudio_plugin, path: "../membrane_portaudio_plugin"},
+      {:membrane_portaudio_plugin, git: "https://github.com/johns10/membrane_portaudio_plugin"},
       {:membrane_audio_mix_plugin, "~> 0.16"},
       {:membrane_raw_audio_format, "~> 0.12.0"},
       {:membrane_raw_audio_parser_plugin, "~> 0.4.0"},
