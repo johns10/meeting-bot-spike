@@ -1,4 +1,4 @@
-from .transcribe import transcribe
+from transcribe import transcribe
 from erlport.erlang import set_message_handler, cast
 from erlport.erlterms import Atom
 
