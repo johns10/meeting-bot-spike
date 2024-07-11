@@ -11,9 +11,8 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
   @window_samples trunc(@window_duration_milliseconds / @chunk_duration_milliseconds)
   @steps_per_frame 2
   @frame_samples trunc(@window_samples / @steps_per_frame)
-  @batch_axis 0
-  @time_axis 1
-  @speaker_axis 2
+  @time_axis 0
+  @speaker_axis 1
 
   def_input_pad(:input,
     accepted_format: %RawAudio{sample_format: :f32le, channels: 1, sample_rate: 16_000}
@@ -109,7 +108,7 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
 
         [
           %{
-            data: get_scores(first <> second, state),
+            scores: get_scores(first <> second, state),
             start_index: (frame_index - 1) * frame_size,
             end_index: new_frame_index * frame_size
           }
@@ -130,7 +129,9 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
       index_to_run = (new_frame_index - 2) * frame_size
       index_before = (new_frame_index - 3) * frame_size
 
-      windows = fetch_windows(new_scores, new_frame_index, frame_size)
+      windows =
+        fetch_windows(new_scores, new_frame_index, frame_size)
+        |> Enum.map(&calculate_speaker_change_detection/1)
 
       Enum.count(windows) |> IO.inspect()
 
@@ -172,6 +173,21 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
       Enum.find(scores, &(&1.start_index == frame_index))
     end)
     |> Enum.reject(&is_nil(&1))
+  end
+
+  def calculate_speaker_change_detection(%{scores: scores}) do
+    scores
+    |> Nx.diff(axis: @time_axis, order: 1)
+    |> Nx.abs()
+    |> Nx.reduce_max(axes: [@speaker_axis])
+    |> IO.inspect(label: :abs)
+  end
+
+  def prepare_window(%{scores: scores}) do
+    {frames_per_window, num_classes} = Nx.shape(scores)
+    hamming_window = hamming_window(frames_per_window)
+
+    Nx.multiply(scores, hamming_window)
   end
 
   def aggregate_windows(first_window, second_window, opts \\ []) do
@@ -221,11 +237,11 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
 
   def hamming_window(m) when is_integer(m) and m > 1 do
     0..(m - 1)
-    |> Enum.map(&calculate_value(&1, m))
+    |> Enum.map(&calculate_hamming_value(&1, m))
     |> Nx.tensor()
   end
 
-  defp calculate_value(n, m) do
+  defp calculate_hamming_value(n, m) do
     0.54 - 0.46 * :math.cos(2 * :math.pi() * n / (m - 1))
   end
 
@@ -233,6 +249,9 @@ defmodule TodoApp.Audio.SpeakerDiarizationSplitter do
     tensor = Nx.from_binary(binary, :f32)
     input = Nx.reshape(tensor, {1, 1, div(byte_size(binary), 4)})
     {result} = Ortex.run(model, {input})
-    result
+    {1, num_samples, num_classes} = Nx.shape(result)
+
+    Nx.reshape(result, {num_samples, num_classes})
+    |> Nx.backend_transfer()
   end
 end
